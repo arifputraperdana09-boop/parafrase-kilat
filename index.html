@@ -282,44 +282,42 @@ function sync(){
   $('b2').disabled=busy||!(docF&&n);
 }
 
-/* ---------- deteksi blok warna di PDF ---------- */
-const mul=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
-const colored=c=>{const mx=Math.max(...c),mn=Math.min(...c);return mx-mn>30&&mx>90};
-async function detect(file){
+/* ---------- deteksi blok warna di PDF ----------
+   Banyak laporan Turnitin menyimpan tiap halaman sebagai gambar (warna highlight
+   sudah "dicetak" di dalam gambar itu), bukan sebagai bentuk vektor terpisah.
+   Jadi halaman dirender ke canvas lalu warnanya dibaca langsung per piksel. */
+async function detect(file,onProgress){
   pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
-  const O=pdfjsLib.OPS,out=[];
+  const out=[],SCALE=1.5;
+  const canvas=document.createElement('canvas');
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
   for(let p=1;p<=pdf.numPages;p++){
-    const pg=await pdf.getPage(p),ol=await pg.getOperatorList(),tc=await pg.getTextContent();
-    let m=[1,0,0,1,0,0],fill=[0,0,0],st=[],pend=[],rects=[];
-    ol.fnArray.forEach((fn,i)=>{
-      const a=ol.argsArray[i];
-      if(fn===O.save)st.push([m,fill]);
-      else if(fn===O.restore){const t=st.pop();if(t){m=t[0];fill=t[1]}}
-      else if(fn===O.transform)m=mul(m,a);
-      else if(fn===O.setFillRGBColor)fill=[a[0],a[1],a[2]];
-      else if(fn===O.constructPath){
-        const ops=a[0],co=a[1];let k=0;
-        for(const op of ops){
-          if(op===O.rectangle){
-            const x=co[k],y=co[k+1],w=co[k+2],h=co[k+3];k+=4;
-            const pts=[[x,y],[x+w,y],[x,y+h],[x+w,y+h]].map(q=>[m[0]*q[0]+m[2]*q[1]+m[4],m[1]*q[0]+m[3]*q[1]+m[5]]);
-            const xs=pts.map(q=>q[0]),ys=pts.map(q=>q[1]);
-            pend.push([Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]);
-          }else if(op===O.moveTo||op===O.lineTo)k+=2;
-          else if(op===O.curveTo)k+=6;
-          else if(op===O.curveTo2||op===O.curveTo3)k+=4;
-        }
-      }else if(fn===O.fill||fn===O.eoFill||fn===O.fillStroke||fn===O.eoFillStroke||fn===O.closeFillStroke||fn===O.closeEOFillStroke){
-        if(colored(fill))rects.push(...pend);pend=[];
-      }else if(fn===O.endPath||fn===O.stroke||fn===O.closeStroke)pend=[];
-    });
+    if(onProgress)onProgress(p,pdf.numPages);
+    const pg=await pdf.getPage(p);
+    const vp=pg.getViewport({scale:SCALE});
+    canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    await pg.render({canvasContext:ctx,viewport:vp}).promise;
+    const W=canvas.width,H=canvas.height;
+    const img=ctx.getImageData(0,0,W,H).data;
+    const isColored=(x,y)=>{
+      x=x|0;y=y|0; if(x<0||y<0||x>=W||y>=H)return false;
+      const i=(y*W+x)*4,r=img[i],g=img[i+1],b=img[i+2];
+      const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+      return (mx-mn)>18 && mx>120; // warna pastel/terang khas blok highlight; mengabaikan teks hitam-putih
+    };
+    const tc=await pg.getTextContent();
     let cur=[];
     const flush=()=>{const s=cur.join(' ').replace(/\s+/g,' ').trim();if(s.length>=20)out.push(s);cur=[]};
     for(const it of tc.items){
-      if(!it.str||!it.str.trim())continue;
-      const x=it.transform[4]+(it.width||0)/2,y=it.transform[5]+(it.height||8)*0.3;
-      if(rects.some(r=>x>=r[0]-1&&x<=r[2]+1&&y>=r[1]-1&&y<=r[3]+1))cur.push(it.str);else flush();
+      if(!it.str||!it.str.trim()){flush();continue}
+      const tr=it.transform,fh=Math.hypot(tr[2],tr[3])||8,w=it.width||0;
+      const a=vp.convertToViewportPoint(tr[4],tr[5]);
+      const b=vp.convertToViewportPoint(tr[4]+w,tr[5]+fh*0.6);
+      const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2;
+      const hit=isColored(cx,cy)||isColored(a[0]+(cx-a[0])*0.3,a[1]+(cy-a[1])*0.3)||isColored(b[0]-(b[0]-cx)*0.3,b[1]-(b[1]-cy)*0.3);
+      if(hit)cur.push(it.str);else flush();
     }
     flush();
   }
@@ -328,7 +326,7 @@ async function detect(file){
 $('b1').onclick=async()=>{
   busy=true;sync();$('b1').textContent='Membaca PDF…';
   try{
-    const s=await detect(pdfF);
+    const s=await detect(pdfF,(p,n)=>{$('b1').textContent=`Membaca PDF… (${p}/${n})`});
     $('segs').value=s.join('\n');
     if(!s.length)$('cnt').textContent='Tidak ada blok warna yang terbaca otomatis. Tempel teks terblok secara manual, satu bagian per baris.';
   }catch(e){$('cnt').textContent='Gagal membaca PDF: '+(e.message||e)+'. Anda tetap bisa menempel teks terblok manual.'}
