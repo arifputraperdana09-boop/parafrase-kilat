@@ -1,5 +1,5 @@
 {
   "functions": {
-    "api/paraphrase.js": { "maxDuration": 120 }
+    "api/paraphrase.js": { "maxDuration": 60 }
   }
 }

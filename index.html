@@ -523,6 +523,7 @@ async function callBatch(items,retry){
     let j={};try{j=await r.json()}catch(e){}
     if(r.ok)return j;
     if(r.status===429&&!j.daily){await countdown(Math.min(90,Number(j.retryAfter)||40),'Jatah per menit Gemini sedang penuh.');continue}
+    if((r.status===504||r.status===502||r.status===500)&&attempt<3){await countdown(8,'Server sempat lambat merespons (error '+r.status+').');continue}
     const e=new Error(j.error||('Server error '+r.status));e.status=r.status;throw e;
   }
   throw new Error('Gemini terus menolak karena batas per menit. Coba lagi beberapa menit lagi.');
@@ -541,7 +542,7 @@ function verify(t,raw){
 }
 function makeBatches(tasks){
   const out=[];let cur=[],len=0;
-  for(const t of tasks){if(cur.length&&(cur.length>=6||len+t.masked.length>4000)){out.push(cur);cur=[];len=0}cur.push(t);len+=t.masked.length}
+  for(const t of tasks){if(cur.length&&(cur.length>=4||len+t.masked.length>2200)){out.push(cur);cur=[];len=0}cur.push(t);len+=t.masked.length}
   if(cur.length)out.push(cur);return out;
 }
 
