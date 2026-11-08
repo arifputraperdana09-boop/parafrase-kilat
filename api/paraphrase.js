@@ -30,9 +30,16 @@ ${JSON.stringify(data)}`;
 
 async function callGemini(key, model, prompt) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-  const r = await fetch(url, {
+  // Batas waktu per model: kalau satu model lambat/menggantung, pindah ke model
+  // berikutnya sebelum seluruh fungsi Vercel kena timeout (504).
+  const ac = new AbortController();
+  const to = setTimeout(() => ac.abort(), 18000);
+  let r;
+  try {
+    r = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    signal: ac.signal,
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
@@ -47,7 +54,10 @@ async function callGemini(key, model, prompt) {
         }
       }
     })
-  });
+    });
+  } finally {
+    clearTimeout(to);
+  }
   let j = {};
   try { j = await r.json(); } catch (e) {}
   return { r, j };
