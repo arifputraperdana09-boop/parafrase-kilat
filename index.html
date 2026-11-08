@@ -348,7 +348,7 @@ const PROT=[
 const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 function mask(t){
   const map=[];let n=0;
-  const put=m=>{const k='⟦x'+[...String(n++)].map(d=>'abcdefghij'[d]).join('')+'⟧';map.push([k,m]);return k};
+  const put=m=>{const k='[[K'+(n++)+']]';map.push([k,m]);return k};
   const ex=$('lock').value.split(';').map(s=>s.trim()).filter(Boolean).map(s=>new RegExp(esc(s),'gi'));
   let s=t;for(const re of [...ex,...PROT])s=s.replace(re,put);
   return{s,map};
@@ -362,13 +362,15 @@ async function callApi(payload){
   if(!r.ok){const e=new Error(j.error||('Server error '+r.status));e.status=r.status;throw e}
   return j.text||'';
 }
+const TOKEN_RE=/\[\[K\d+\]\]/g;
 async function paraphrase(seg,before,after){
   const {s,map}=mask(seg);
-  if(!/[\p{L}]{3}/u.test(s.replace(/\u27E6x[a-j]+\u27E7/g,'')))return null;
+  if(!/[\p{L}]{3}/u.test(s.replace(TOKEN_RE,'')))return null;
   const norm=x=>x.toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
+  const clean=x=>x.trim().replace(/^["\u201C]|["\u201D]$/g,'').replace(/\*\*/g,'').replace(/`/g,'').trim();
   for(let a=0;a<3;a++){
-    let o=(await callApi({target:s,before,after,level:level()})).trim().replace(/^["\u201C]|["\u201D]$/g,'');
-    const okTok=map.every(([k])=>o.split(k).length===2)&&(o.match(/\u27E6x[a-j]+\u27E7/g)||[]).length===map.length;
+    let o=clean(await callApi({target:s,before,after,level:level()}));
+    const okTok=map.every(([k])=>o.split(k).length===2)&&(o.match(TOKEN_RE)||[]).length===map.length;
     const ratio=o.length/Math.max(1,s.length);
     if(okTok&&ratio>0.5&&ratio<1.9&&norm(o)!==norm(s))return unmask(o,map);
   }

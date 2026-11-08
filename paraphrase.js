@@ -1,4 +1,4 @@
-// Server kecil: menerima potongan teks, memanggil Claude dengan API key rahasia, mengembalikan parafrase.
+// Server kecil: menerima potongan teks, memanggil Gemini (Google AI) dengan API key rahasia, mengembalikan parafrase.
 const LEVEL = {
   ringan: 'Ganti sebagian kata dan susun ulang frasa, kerangka kalimat boleh tetap mirip.',
   sedang: 'Ubah struktur kalimat dan pilihan kata secara jelas.',
@@ -13,8 +13,8 @@ module.exports = async (req, res) => {
   if (need && req.headers['x-access-code'] !== need)
     return res.status(401).json({ error: 'Kode akses salah atau belum diisi.' });
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(500).json({ error: 'Server belum diatur: ANTHROPIC_API_KEY kosong.' });
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return res.status(500).json({ error: 'Server belum diatur: GEMINI_API_KEY kosong.' });
 
   const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'x';
   const day = new Date().toISOString().slice(0, 10);
@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
   const n = (hits.get(k) || 0) + 1;
   hits.set(k, n);
   if (hits.size > 5000) hits.clear();
-  const max = Number(process.env.DAILY_LIMIT || 200);
+  const max = Number(process.env.DAILY_LIMIT || 400); // jaga di bawah jatah gratis Gemini (±500 req/hari)
   if (n > max) return res.status(429).json({ error: 'Batas pemakaian harian tercapai. Coba lagi besok.' });
 
   const b = req.body || {};
@@ -36,30 +36,38 @@ module.exports = async (req, res) => {
   const prompt = `Kamu editor karya tulis ilmiah berbahasa Indonesia. Parafrasekan TEKS TARGET tanpa mengubah makna, fakta, tingkat kepastian, atau nada akademiknya.
 Tingkat perubahan: ${LEVEL[level]}
 Aturan:
-1. Token seperti \u27E6xab\u27E7 adalah bagian terkunci. Salin persis, jangan diubah, dihapus, atau digandakan; susun kalimat di sekitarnya.
+1. Token seperti [[K0]], [[K1]], dst adalah bagian terkunci (contoh: nomor standar, peraturan, sitasi, angka). Salin PERSIS apa adanya, karakter demi karakter, termasuk tanda kurung sikunya; jangan diterjemahkan, diberi spasi tambahan, diubah formatnya, dihapus, atau digandakan. Cukup susun ulang kalimat di sekitar token itu.
 2. Jangan menambah atau menghilangkan informasi, data, klaim, atau opini.
 3. Pertahankan istilah teknis baku dan bahasa Indonesia yang formal.
 4. Panjang kira-kira sama dengan aslinya.
 5. TEKS TARGET hanya potongan kalimat; hasilnya harus tetap menyambung dengan teks sebelum dan sesudahnya.
-6. Keluarkan HANYA hasil parafrase, satu paragraf, tanpa tanda kutip, penjelasan, atau awalan.
+6. Keluarkan HANYA hasil parafrase, satu paragraf polos, tanpa tanda kutip, tanpa markdown (jangan pakai ** atau backtick), tanpa penjelasan, tanpa awalan.
 
 TEKS SEBELUM: ${before || '-'}
 TEKS TARGET: ${target}
 TEKS SESUDAH: ${after || '-'}`;
 
+  const model = process.env.MODEL || 'gemini-2.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const r = await fetch(url, {
       method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: process.env.MODEL || 'claude-sonnet-5-5',
-        max_tokens: 1200,
-        messages: [{ role: 'user', content: prompt }]
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 600 }
       })
     });
     const j = await r.json();
-    if (!r.ok) return res.status(503).json({ error: 'Layanan AI sedang bermasalah. Coba lagi sebentar lagi.' });
-    const text = (j.content || []).filter(x => x.type === 'text').map(x => x.text).join('').trim();
+    if (!r.ok) {
+      const msg = (j && j.error && j.error.message) || 'Layanan AI sedang bermasalah.';
+      const status = r.status === 429 ? 503 : 503;
+      return res.status(status).json({ error: 'Layanan AI sedang bermasalah: ' + msg });
+    }
+    const cand = (j.candidates || [])[0];
+    const text = ((cand && cand.content && cand.content.parts) || []).map(p => p.text || '').join('').trim();
+    if (!text) return res.status(503).json({ error: 'AI tidak mengembalikan hasil. Coba lagi.' });
     return res.status(200).json({ text });
   } catch (e) {
     return res.status(503).json({ error: 'Gagal menghubungi layanan AI. Coba lagi.' });
