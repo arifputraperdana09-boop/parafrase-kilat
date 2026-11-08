@@ -169,7 +169,7 @@ label.l{display:block;font-weight:600;font-size:.88rem;margin:14px 0 6px}
 
       <section class="card" aria-labelledby="h2">
         <h2 id="h2"><b>2</b>Periksa bagian terdeteksi</h2>
-        <p class="sub">Satu baris satu bagian. Hapus yang tidak perlu, atau tempel sendiri teks terblok jika deteksi otomatis tidak menangkapnya.</p>
+        <p class="sub">Satu baris satu bagian. Hapus yang tidak perlu, atau tempel sendiri teks terblok jika deteksi otomatis tidak menangkapnya. Laporan Turnitin yang halamannya berupa gambar dibaca dengan OCR (bisa beberapa menit); salah ketik kecil hasil OCR tidak masalah karena yang diganti tetap teks asli di Word.</p>
         <label class="l" for="segs" style="margin-top:0">Bagian yang akan diparafrase</label>
         <textarea id="segs" placeholder="Tekan “Deteksi teks terblok”, atau tempel teks di sini, satu bagian per baris."></textarea>
         <div class="hint" id="cnt">Belum ada bagian.</div>
@@ -282,51 +282,156 @@ function sync(){
   $('b2').disabled=busy||!(docF&&n);
 }
 
-/* ---------- deteksi blok warna di PDF ----------
-   Banyak laporan Turnitin menyimpan tiap halaman sebagai gambar (warna highlight
-   sudah "dicetak" di dalam gambar itu), bukan sebagai bentuk vektor terpisah.
-   Jadi halaman dirender ke canvas lalu warnanya dibaca langsung per piksel. */
+const PDF_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+/* ---------- deteksi blok highlight di PDF Turnitin ----------
+   Dua jenis laporan didukung:
+   A. Halaman punya lapisan teks (laporan Turnitin baru): kata dibaca dari lapisan teks.
+   B. Halaman isi berupa gambar (laporan Turnitin lama): kata dibaca dengan OCR.
+   Posisi blok diambil dari kotak vektor berwarna bila ada (tahan watermark),
+   atau dari warna piksel bila laporan tidak memakai kotak vektor.
+   Halaman daftar sumber di akhir laporan dilewati. */
+const SRC_PAGE_RE=/PRIMARY SOURCES|ORIGINALITY REPORT|SIMILARITY INDEX|EXCLUDE QUOTES|EXCLUDE BIBLIOGRAPHY|EXCLUDE MATCHES|words\s*[\u2014\u2013-]\s*<\s*\d|Integrity Overview|Match Groups|Top Sources|Sumber Utama/i;
+const isSourcePage=t=>SRC_PAGE_RE.test(t)||(t.match(/<\s*1\s*%/g)||[]).length>=3;
+const HEADFOOT_RE=/Submission ID|trn:oid|Integrity Submission|Page \d+ of \d+/i;
+const OCR_LIB='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+let OCR_OPTS={};               // bisa diisi workerPath/corePath/langPath bila perlu
+let ocrWorker=null;
+const mul=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
+const hex2rgb=h=>{h=String(h).replace('#','');return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]};
+function loadScript(src){return new Promise((ok,bad)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>bad(new Error('Gagal memuat '+src));document.head.appendChild(s)})}
+async function getOcr(){
+  if(ocrWorker)return ocrWorker;
+  if(!window.Tesseract)await loadScript(OCR_LIB);
+  ocrWorker=await Tesseract.createWorker(['ind','eng'],1,OCR_OPTS);
+  return ocrWorker;
+}
+
+/* bentuk berwarna dari daftar operator PDF (koordinat halaman). Label nomor sumber dipisahkan nanti. */
+function pdfShapes(ol){
+  const O=pdfjsLib.OPS,FILLS=new Set([O.fill,O.eoFill,O.fillStroke,O.eoFillStroke,O.closeFillStroke,O.closeEOFillStroke]);
+  let m=[1,0,0,1,0,0],fill=[0,0,0],st=[],pend=[];const shapes=[];
+  const colored=c=>{const mx=Math.max(c[0],c[1],c[2]),mn=Math.min(c[0],c[1],c[2]);return mx-mn>18&&mx>80};
+  const tbox=(x0,y0,x1,y1)=>{const P=[[x0,y0],[x1,y0],[x0,y1],[x1,y1]].map(([x,y])=>[m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]]);
+    const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]);return[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]};
+  ol.fnArray.forEach((fn,i)=>{
+    const a=ol.argsArray[i];
+    if(fn===O.save)st.push([m,fill]);
+    else if(fn===O.restore){const t=st.pop();if(t){m=t[0];fill=t[1]}}
+    else if(fn===O.transform)m=mul(m,a);
+    else if(fn===O.setFillRGBColor)fill=(typeof a[0]==='string')?hex2rgb(a[0]):[a[0],a[1],a[2]];
+    else if(fn===O.constructPath){
+      const ops=a[0],co=a[1];let k=0,curve=false;const xs=[],ys=[];
+      for(const op of ops){
+        if(op===O.rectangle){const x=co[k],y=co[k+1],w=co[k+2],h=co[k+3];k+=4;xs.push(x,x+w);ys.push(y,y+h)}
+        else if(op===O.moveTo||op===O.lineTo){xs.push(co[k]);ys.push(co[k+1]);k+=2}
+        else if(op===O.curveTo){curve=true;xs.push(co[k+4]);ys.push(co[k+5]);k+=6}
+        else if(op===O.curveTo2||op===O.curveTo3){curve=true;xs.push(co[k+2]);ys.push(co[k+3]);k+=4}
+      }
+      if(xs.length)pend.push({b:tbox(Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)),curve});
+    }else if(FILLS.has(fn)){
+      if(colored(fill))for(const q of pend){const[x0,y0,x1,y1]=q.b,w=x1-x0,h=y1-y0;if(w>2&&h>3&&h<40)shapes.push(q)}
+      pend=[];
+    }else if(fn===O.endPath||fn===O.stroke||fn===O.closeStroke)pend=[];
+  });
+  return shapes;
+}
+/* label nomor sumber = bentuk bersudut bulat, atau bentuk yang berisi teks angka saja */
+function splitShapes(shapes,items){
+  const digits=items.filter(it=>/^\s*\d{1,3}\s*$/.test(it.str)).map(it=>{const t=it.transform;return[t[4]+(it.width||0)/2,t[5]+Math.hypot(t[2],t[3])*0.35]});
+  const hl=[],badge=[];
+  for(const q of shapes){const b=q.b;(q.curve||digits.some(([x,y])=>inBox(x,y,b,2))?badge:hl).push(b)}
+  return{hl,badge};
+}
+const toVp=(vp,b)=>{const r=vp.convertToViewportRectangle(b);return[Math.min(r[0],r[2]),Math.min(r[1],r[3]),Math.max(r[0],r[2]),Math.max(r[1],r[3])]};
+const overlap=(w,r)=>{const x=Math.max(0,Math.min(w[2],r[2])-Math.max(w[0],r[0])),y=Math.max(0,Math.min(w[3],r[3])-Math.max(w[1],r[1]));return x*y};
+const inBox=(x,y,r,pad=0)=>x>=r[0]-pad&&x<=r[2]+pad&&y>=r[1]-pad&&y<=r[3]+pad;
+
+/* kumpulkan kata berurutan yang diblok; celah ≤2 kata tak diblok ikut digabung */
+function groupWords(words,isHit,out){
+  let cur=[],gap=[];
+  const flush=()=>{const s=cur.map(w=>w.t).join(' ').replace(/\s+/g,' ').trim();if(cur.length>=3&&s.length>=15)out.push(s);cur=[];gap=[]};
+  for(const w of words){
+    if(isHit(w)){if(cur.length&&gap.length)cur.push(...gap);gap=[];cur.push(w)}
+    else if(cur.length){gap.push(w);if(gap.length>2)flush()}
+  }
+  flush();
+}
+
 async function detect(file,onProgress){
-  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc=PDF_WORKER;
   const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
-  const out=[],SCALE=1.5;
+  const out=[];
   const canvas=document.createElement('canvas');
   const ctx=canvas.getContext('2d',{willReadFrequently:true});
   for(let p=1;p<=pdf.numPages;p++){
-    if(onProgress)onProgress(p,pdf.numPages);
     const pg=await pdf.getPage(p);
-    const vp=pg.getViewport({scale:SCALE});
-    canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    await pg.render({canvasContext:ctx,viewport:vp}).promise;
-    const W=canvas.width,H=canvas.height;
-    const img=ctx.getImageData(0,0,W,H).data;
-    const isColored=(x,y)=>{
-      x=x|0;y=y|0; if(x<0||y<0||x>=W||y>=H)return false;
-      const i=(y*W+x)*4,r=img[i],g=img[i+1],b=img[i+2];
-      const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
-      return (mx-mn)>18 && mx>120; // warna pastel/terang khas blok highlight; mengabaikan teks hitam-putih
-    };
     const tc=await pg.getTextContent();
-    let cur=[];
-    const flush=()=>{const s=cur.join(' ').replace(/\s+/g,' ').trim();if(s.length>=20)out.push(s);cur=[]};
-    for(const it of tc.items){
-      if(!it.str||!it.str.trim()){flush();continue}
-      const tr=it.transform,fh=Math.hypot(tr[2],tr[3])||8,w=it.width||0;
-      const a=vp.convertToViewportPoint(tr[4],tr[5]);
-      const b=vp.convertToViewportPoint(tr[4]+w,tr[5]+fh*0.6);
-      const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2;
-      const hit=isColored(cx,cy)||isColored(a[0]+(cx-a[0])*0.3,a[1]+(cy-a[1])*0.3)||isColored(b[0]-(b[0]-cx)*0.3,b[1]-(b[1]-cy)*0.3);
-      if(hit)cur.push(it.str);else flush();
+    const pageText=tc.items.map(i=>i.str).join(' ');
+    if(isSourcePage(pageText))continue;                            // halaman daftar sumber
+    const textWords=(pageText.match(/\p{L}{3,}/gu)||[]).length;
+    const {hl,badge}=splitShapes(pdfShapes(await pg.getOperatorList()),tc.items);
+    if(textWords>=30){
+      /* A. lapisan teks tersedia */
+      if(onProgress)onProgress(p,pdf.numPages,'');
+      const vp=pg.getViewport({scale:1.5});
+      let isColored=null;
+      if(!hl.length){
+        canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);
+        await pg.render({canvasContext:ctx,viewport:vp}).promise;
+        const W=canvas.width,H=canvas.height,img=ctx.getImageData(0,0,W,H).data;
+        isColored=(x,y)=>{x=x|0;y=y|0;if(x<0||y<0||x>=W||y>=H)return false;const i=(y*W+x)*4,r=img[i],g=img[i+1],b=img[i+2];
+          const mx=Math.max(r,g,b),mn=Math.min(r,g,b);return(mx-mn)>18&&mx>120};
+      }
+      const R=hl.map(b=>toVp(vp,b)),B=badge.map(b=>toVp(vp,b));
+      const words=[];
+      for(const it of tc.items){
+        if(!it.str||!it.str.trim()||HEADFOOT_RE.test(it.str))continue;
+        const tr=it.transform,fh=Math.hypot(tr[2],tr[3])||8,w=it.width||0;
+        const a=vp.convertToViewportPoint(tr[4],tr[5]),b=vp.convertToViewportPoint(tr[4]+w,tr[5]+fh*0.6);
+        const box=[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])];
+        const cx=(box[0]+box[2])/2,cy=(box[1]+box[3])/2;
+        if(/^\d{1,3}$/.test(it.str.trim())&&B.some(r=>inBox(cx,cy,r,2)))continue;   // label nomor sumber
+        words.push({t:it.str,box,cx,cy});
+      }
+      groupWords(words,w=>R.length?R.some(r=>overlap(w.box,r)>=0.4*Math.max(1,(w.box[2]-w.box[0])*(w.box[3]-w.box[1]))||inBox(w.cx,w.cy,r,1))
+        :isColored(w.cx,w.cy),out);
+    }else{
+      /* B. halaman berupa gambar: OCR */
+      if(!hl.length)continue;   // tanpa kotak blok, tidak ada yang perlu dibaca
+      if(onProgress)onProgress(p,pdf.numPages,'ocr');
+      const vp=pg.getViewport({scale:2.2});
+      canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+      await pg.render({canvasContext:ctx,viewport:vp}).promise;
+      const R=hl.map(b=>toVp(vp,b)),B=badge.map(b=>toVp(vp,b));
+      // OCR hanya pita baris yang memuat blok (lebih cepat)
+      const ys=R.map(r=>[r[1],r[3]]).sort((a,b)=>a[0]-b[0]);
+      const bands=[];for(const[y0,y1]of ys){const L=bands[bands.length-1];if(L&&y0<=L[1]+60)L[1]=Math.max(L[1],y1);else bands.push([y0,y1])}
+      const worker=await getOcr();
+      const words=[],strip=document.createElement('canvas'),sctx=strip.getContext('2d');
+      for(const[y0,y1]of bands){
+        const top=Math.max(0,Math.floor(y0-16)),h=Math.min(canvas.height-top,Math.ceil(y1-y0+32));
+        strip.width=canvas.width;strip.height=h;
+        sctx.fillStyle='#fff';sctx.fillRect(0,0,strip.width,h);
+        sctx.drawImage(canvas,0,top,canvas.width,h,0,0,canvas.width,h);
+        const {data}=await worker.recognize(strip,{},{blocks:true,text:false});
+        for(const bl of data.blocks||[])for(const pa of bl.paragraphs)for(const ln of pa.lines)for(const w of ln.words){
+          const t=(w.text||'').trim();if(!t)continue;
+          const box=[w.bbox.x0,w.bbox.y0+top,w.bbox.x1,w.bbox.y1+top],cx=(box[0]+box[2])/2,cy=(box[1]+box[3])/2;
+          if(B.some(r=>inBox(cx,cy,r,3)))continue;                  // angka label sumber
+          words.push({t,box,cx,cy});
+        }
+      }
+      groupWords(words,w=>{const A=Math.max(1,(w.box[2]-w.box[0])*(w.box[3]-w.box[1]));return R.some(r=>overlap(w.box,r)>=0.4*A)},out);
     }
-    flush();
   }
   return [...new Set(out)];
 }
+
 $('b1').onclick=async()=>{
   busy=true;sync();$('b1').textContent='Membaca PDF…';
   try{
-    const s=await detect(pdfF,(p,n)=>{$('b1').textContent=`Membaca PDF… (${p}/${n})`});
+    const s=await detect(pdfF,(p,n,m)=>{$('b1').textContent=m==='ocr'?`Membaca teks gambar (OCR)… halaman ${p}/${n}`:`Membaca PDF… halaman ${p}/${n}`});
     $('segs').value=s.join('\n');
     if(!s.length)$('cnt').textContent='Tidak ada blok warna yang terbaca otomatis. Tempel teks terblok secara manual, satu bagian per baris.';
   }catch(e){$('cnt').textContent='Gagal membaca PDF: '+(e.message||e)+'. Anda tetap bisa menempel teks terblok manual.'}
@@ -354,28 +459,6 @@ function mask(t){
   return{s,map};
 }
 const unmask=(s,map)=>map.reduce((a,[k,v])=>a.split(k).join(v),s);
-
-/* ---------- parafrase via server (/api/paraphrase) ---------- */
-async function callApi(payload){
-  const r=await fetch('/api/paraphrase',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('code').value.trim()},body:JSON.stringify(payload)});
-  let j={};try{j=await r.json()}catch(e){}
-  if(!r.ok){const e=new Error(j.error||('Server error '+r.status));e.status=r.status;throw e}
-  return j.text||'';
-}
-const TOKEN_RE=/\[\[K\d+\]\]/g;
-async function paraphrase(seg,before,after){
-  const {s,map}=mask(seg);
-  if(!/[\p{L}]{3}/u.test(s.replace(TOKEN_RE,'')))return null;
-  const norm=x=>x.toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
-  const clean=x=>x.trim().replace(/^["\u201C]|["\u201D]$/g,'').replace(/\*\*/g,'').replace(/`/g,'').trim();
-  for(let a=0;a<3;a++){
-    let o=clean(await callApi({target:s,before,after,level:level()}));
-    const okTok=map.every(([k])=>o.split(k).length===2)&&(o.match(TOKEN_RE)||[]).length===map.length;
-    const ratio=o.length/Math.max(1,s.length);
-    if(okTok&&ratio>0.5&&ratio<1.9&&norm(o)!==norm(s))return unmask(o,map);
-  }
-  return null;
-}
 
 /* ---------- pencarian & penggantian di Word ---------- */
 const nrm=s=>{let n='',m=[];for(let i=0;i<s.length;i++){if(/[\p{L}\p{N}]/u.test(s[i])){n+=s[i].toLowerCase();m.push(i)}}return{n,m}};
@@ -429,6 +512,117 @@ function replaceRange(doc,loc,txt){
   cache.delete(loc.p);
 }
 
+/* ---------- parafrase via server (/api/paraphrase), berkelompok ---------- */
+const TOKEN_RE=/\[\[K\d+\]\]/g;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function countdown(sec,msg){for(let s=sec;s>0;s--){$('st').textContent=`${msg} Melanjutkan dalam ${s} detik…`;await sleep(1000)}}
+async function callBatch(items,retry){
+  for(let attempt=0;attempt<6;attempt++){
+    const r=await fetch('/api/paraphrase',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('code').value.trim()},
+      body:JSON.stringify({level:level(),retry,items:items.map(t=>({id:t.id,target:t.masked,before:t.before,after:t.after}))})});
+    let j={};try{j=await r.json()}catch(e){}
+    if(r.ok)return j;
+    if(r.status===429&&!j.daily){await countdown(Math.min(90,Number(j.retryAfter)||40),'Jatah per menit Gemini sedang penuh.');continue}
+    const e=new Error(j.error||('Server error '+r.status));e.status=r.status;throw e;
+  }
+  throw new Error('Gemini terus menolak karena batas per menit. Coba lagi beberapa menit lagi.');
+}
+const normTxt=x=>x.toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
+const cleanOut=x=>String(x||'').trim().replace(/^["“]|["”]$/g,'').replace(/\*\*/g,'').replace(/`/g,'').trim();
+function verify(t,raw){
+  const o=cleanOut(raw);
+  if(!o)return{why:'AI tidak mengembalikan hasil'};
+  const okTok=t.map.every(([k])=>o.split(k).length===2)&&(o.match(TOKEN_RE)||[]).length===t.map.length;
+  if(!okTok)return{why:'bagian terkunci (angka, sitasi, peraturan) tidak utuh di hasil AI'};
+  const ratio=o.length/Math.max(1,t.masked.length);
+  if(ratio<0.5||ratio>1.9)return{why:'panjang hasil AI tidak wajar'};
+  if(normTxt(o)===normTxt(t.masked))return{why:'hasil AI sama dengan teks asli'};
+  return{text:unmask(o,t.map)};
+}
+function makeBatches(tasks){
+  const out=[];let cur=[],len=0;
+  for(const t of tasks){if(cur.length&&(cur.length>=6||len+t.masked.length>4000)){out.push(cur);cur=[];len=0}cur.push(t);len+=t.masked.length}
+  if(cur.length)out.push(cur);return out;
+}
+
+/* ---------- pencocokan toleran ke Word ----------
+   Teks dari PDF (apalagi hasil OCR) bisa sedikit berbeda. Kata dicocokkan satu per satu
+   (boleh salah 1 huruf untuk kata panjang); yang diganti selalu teks asli dari Word. */
+const toks=text=>{const o=[],re=/[\p{L}\p{N}]+/gu;let m;while((m=re.exec(text)))o.push({w:m[0].toLowerCase(),s:m.index,e:m.index+m[0].length});return o};
+function lev1(a,b){ // true bila jarak edit ≤1
+  if(a===b)return true;const la=a.length,lb=b.length;if(Math.abs(la-lb)>1)return false;
+  let i=0,j=0,d=0;while(i<la&&j<lb){if(a[i]===b[j]){i++;j++;continue}if(++d>1)return false;if(la>lb)i++;else if(lb>la)j++;else{i++;j++}}
+  return d+(la-i)+(lb-j)<=1;
+}
+const wsim=(a,b)=>a===b?3:(a.length>=5&&b.length>=5&&lev1(a,b))?2:0;
+function buildIndex(paras){
+  const P=[];let inRef=false;
+  for(const p of paras){
+    const c=info(p),tx=c.text.trim();
+    if(tx.length<40&&REFS.includes(tx.toLowerCase().replace(/[:.]$/,'')))inRef=true;   // daftar pustaka tidak disentuh
+    if(inRef)continue;
+    const T=toks(c.text);if(T.length<3)continue;
+    P.push({p,T});
+  }
+  const inv=new Map();
+  P.forEach((e,i)=>{for(const w of new Set(e.T.map(t=>t.w)))if(w.length>=4){if(!inv.has(w))inv.set(w,[]);inv.get(w).push(i)}});
+  return{P,inv};
+}
+function alignWords(A,B){
+  const n=A.length,m=B.length,W=m+1,H=new Float32Array((n+1)*W),S=new Uint8Array((n+1)*W);
+  let best=0,bi=0,bj=0;
+  for(let i=1;i<=n;i++)for(let j=1;j<=m;j++){
+    const s=wsim(A[i-1],B[j-1].w),d=H[(i-1)*W+j-1]+(s||-2),u=H[(i-1)*W+j]-1,l=H[i*W+j-1]-1;
+    let v=0,k=0;if(d>v){v=d;k=1}if(u>v){v=u;k=2}if(l>v){v=l;k=3}
+    H[i*W+j]=v;S[i*W+j]=k*4+(s?1:0);if(v>best){best=v;bi=i;bj=j}
+  }
+  if(!best)return null;
+  let i=bi,j=bj,matched=0,i0=bi,j0=bj;
+  while(i>0&&j>0&&H[i*W+j]>0){const k=S[i*W+j]>>2;if(k===1){if(S[i*W+j]&1)matched++;i0=i;j0=j;i--;j--}else if(k===2){i--}else if(k===3){j--}else break}
+  return{matched,i0:i0-1,i1:bi-1,j0:j0-1,j1:bj-1};
+}
+function locateFuzzy(idx,seg,depth=0){
+  const A=toks(seg.normalize('NFKC')).map(t=>t.w);
+  if(A.length<3||depth>4)return[];
+  const votes=new Map();
+  for(const w of new Set(A))if(w.length>=4)for(const pi of idx.inv.get(w)||[])votes.set(pi,(votes.get(pi)||0)+1);
+  const cand=[...votes.entries()].filter(([,v])=>v>=2).sort((a,b)=>b[1]-a[1]).slice(0,4);
+  let best=null;
+  for(const[pi]of cand){
+    const B=idx.P[pi].T,r=alignWords(A,B);if(!r)continue;
+    const span=r.i1-r.i0+1;
+    if(r.matched>=3&&r.matched>=0.5*span&&(!best||r.matched>best.r.matched))best={pi,r};
+  }
+  if(!best)return[];
+  const e=idx.P[best.pi],r=best.r;
+  const res=[{pi:best.pi,p:e.p,s:e.T[r.j0].s,e:e.T[r.j1].e}];
+  if(r.i0>=4)res.push(...locateFuzzy(idx,A.slice(0,r.i0).join(' '),depth+1));
+  if(A.length-1-r.i1>=4)res.push(...locateFuzzy(idx,A.slice(r.i1+1).join(' '),depth+1));
+  return res;
+}
+/* gabungkan potongan yang berdekatan; lengkapi ke batas kalimat bila sisanya ≤3 kata */
+function mergeSpans(found){
+  const byP=new Map();
+  for(const f of found){if(!byP.has(f.p))byP.set(f.p,[]);byP.get(f.p).push(f)}
+  const out=[];
+  for(const[p,list]of byP){
+    const text=info(p).text,wc=(a,b)=>toks(text.slice(a,b)).length;
+    list.sort((a,b)=>a.s-b.s);
+    let cur=[];
+    for(const f of list){const L=cur[cur.length-1];if(L&&f.s<=L.e+1||L&&wc(L.e,f.s)<=3)L.e=Math.max(L.e,f.e);else cur.push({p,pi:f.pi,s:f.s,e:f.e})}
+    for(const sp of cur){
+      let a=sp.s;while(a>0&&!/[.!?]/.test(text[a-1]))a--;while(a<sp.s&&/\s/.test(text[a]))a++;
+      if(wc(a,sp.s)<=4)sp.s=a;
+      let b=sp.e;while(b<text.length&&!/[.!?]/.test(text[b]))b++;
+      if(b<text.length&&wc(sp.e,b)<=4)sp.e=b+1;
+      else if(b>=text.length&&wc(sp.e,b)<=4)sp.e=text.replace(/\s+$/,'').length;
+    }
+    const fin=[];for(const sp of cur){const L=fin[fin.length-1];if(L&&sp.s<=L.e)L.e=Math.max(L.e,sp.e);else fin.push(sp)}
+    out.push(...fin);
+  }
+  return out;
+}
+
 /* ---------- alur utama ---------- */
 const sp=(tag,t)=>{const e=document.createElement(tag);e.textContent=t;return e};
 function row(cls,title,nodes){
@@ -441,38 +635,63 @@ $('b2').onclick=async()=>{
   const list=lines();if(!list.length||!docF)return;
   busy=true;sync();$('c4').hidden=false;$('res').innerHTML='';$('sum').textContent='';
   $('dl').hidden=true;$('dl').disabled=true;$('barw').hidden=false;$('bi').style.width='0';
-  let ok=0,miss=0,fail=0;
+  let miss=0,short=0,stop='',model='';
   try{
     const zip=await JSZip.loadAsync(await docF.arrayBuffer());
     const xml=await zip.file('word/document.xml').async('string');
     const doc=new DOMParser().parseFromString(xml,'application/xml');
     const paras=[...doc.getElementsByTagNameNS(W,'p')];
     cache.clear();
-    for(let i=0;i<list.length;i++){
-      const seg=list[i];
-      $('st').textContent=`Memproses ${i+1} dari ${list.length}…`;$('bi').style.width=(i/list.length*100)+'%';
-      const loc=locate(paras,seg);
-      if(!loc){miss++;row('bad','Tidak ditemukan di Word',[sp('span',seg)]);continue}
-      const orig=loc.c.text.slice(loc.s,loc.e);
-      let np=null;
-      try{np=await paraphrase(orig,loc.c.text.slice(Math.max(0,loc.s-160),loc.s),loc.c.text.slice(loc.e,loc.e+160))}
-      catch(e){
-        if(e&&(e.status===401||e.status===429||e.status===500||e.status===503)){$('st').textContent=e.message;break}
-      }
-      if(!np){fail++;row('bad','Dilewati, tinjau manual',[sp('span',orig)]);continue}
-      replaceRange(doc,loc,np);ok++;
-      row('ok','Diganti',[sp('s',orig),document.createElement('br'),sp('mark',np)]);
+    $('st').textContent='Mencocokkan teks terdeteksi dengan isi Word…';await sleep(30);
+    const idx=buildIndex(paras),found=[],missed=[];
+    for(const seg of list){const r=locateFuzzy(idx,seg);if(r.length)found.push(...r);else{miss++;missed.push(seg)}}
+    const spans=mergeSpans(found).sort((a,b)=>a.pi-b.pi||a.s-b.s);
+    const tasks=[];
+    for(const s0 of spans){
+      const c=info(s0.p),orig=c.text.slice(s0.s,s0.e);
+      if(toks(orig).length<5){short++;continue}                       // judul/potongan sangat pendek
+      const m=mask(orig);
+      if(toks(m.s.replace(TOKEN_RE,' ')).length<3){short++;continue}   // hampir seluruhnya bagian terkunci
+      tasks.push({id:String(tasks.length),p:s0.p,s:s0.s,e:s0.e,orig,masked:m.s,map:m.map,
+        before:c.text.slice(Math.max(0,s0.s-200),s0.s),after:c.text.slice(s0.e,s0.e+200)});
     }
+    const total=tasks.length;let done=0;
+    for(const retry of [false,true]){
+      const todo=tasks.filter(t=>!t.out);if(!todo.length||stop)break;
+      const queue=makeBatches(todo);
+      const worker=async()=>{
+        while(queue.length&&!stop){
+          const b=queue.shift();
+          $('st').textContent=retry?`Mengulang bagian yang belum lolos pemeriksaan… (${done}/${total} selesai)`:`Memparafrase… (${done}/${total} selesai)`;
+          try{
+            const j=await callBatch(b,retry);model=j.model||model;
+            const got=new Map((j.results||[]).map(r=>[String(r.id),r.text]));
+            for(const t of b){const v=verify(t,got.get(t.id));if(v.text){t.out=v.text;done++}else t.why=v.why}
+          }catch(e){stop=e.message||String(e)}
+          $('bi').style.width=(total?done/total*100:100)+'%';
+        }
+      };
+      await Promise.all([worker(),worker()]);
+    }
+    // ganti dari belakang agar posisi teks sebelumnya tetap benar
+    for(const t of tasks.filter(t=>t.out).sort((a,b)=>b.s-a.s))replaceRange(doc,{p:t.p,c:info(t.p),s:t.s,e:t.e},t.out);
+    let ok=0,fail=0;
+    for(const t of tasks){
+      if(t.out){ok++;row('ok','Diganti',[sp('s',t.orig),document.createElement('br'),sp('mark',t.out)])}
+      else{fail++;row('bad','Dilewati: '+(t.why||(stop?'proses berhenti sebelum bagian ini':'belum diproses')),[sp('span',t.orig)])}
+    }
+    for(const seg of missed)row('bad','Tidak ditemukan di Word',[sp('span',seg)]);
     $('bi').style.width='100%';
     zip.file('word/document.xml',new XMLSerializer().serializeToString(doc));
     outBlob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',compression:'DEFLATE'});
     outName=docF.name.replace(/\.docx$/i,'')+'_parafrase.docx';
-    $('sum').textContent=`${ok} bagian diparafrase, ${fail} dilewati, ${miss} tidak ditemukan. Teks lain tidak diubah.`;
-    if($('st').textContent.startsWith('Memproses'))$('st').textContent='Selesai.';
+    $('sum').textContent=`${ok} bagian diparafrase, ${fail} dilewati, ${miss} teks PDF tidak ditemukan di Word`+(short?`, ${short} judul/potongan pendek tidak diubah`:'')+'. Teks lain tidak diubah.';
+    $('st').textContent=stop?('Berhenti: '+stop+(ok?' Bagian yang sudah berhasil tetap bisa diunduh.':'')):('Selesai.'+(model?' Model: '+model:''));
     if(ok){$('dl').hidden=false;$('dl').disabled=false}
   }catch(e){$('st').textContent='Terjadi kesalahan: '+(e.message||e)}
   busy=false;sync();
 };
+
 $('dl').onclick=()=>{
   const a=document.createElement('a');a.href=URL.createObjectURL(outBlob);a.download=outName;
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
