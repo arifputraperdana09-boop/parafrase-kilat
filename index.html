@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}</style>
+<title>Parafrase Kilat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: form dua kolom (langkah di kiri, ringkasan lengket di kanan) seperti halaman pemesanan jasa.
+   Ciri khas: penanda stabilo kuning, karena hasil akhir memang diberi blok kuning di Word. */
+:root{
+  --bg:#f3f4f8;--surface:#ffffff;--ink:#16193a;--mute:#5d6285;--line:#dfe1ec;
+  --brand:#2b3bd6;--brand-ink:#ffffff;--brand-soft:#e8eafc;
+  --hl:#ffd93d;--hl-ink:#3b2f00;
+  --ok:#0f7a4d;--bad:#b42318;--bad-soft:#fdecea;
+  --f-display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1124;--surface:#181b36;--ink:#eceefc;--mute:#9a9fc6;--line:#2b2f55;
+  --brand:#8f9bff;--brand-ink:#0f1124;--brand-soft:#242a5e;
+  --hl:#ffd93d;--hl-ink:#2a2100;--ok:#4cc38a;--bad:#ff8a80;--bad-soft:#3a1b1d;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1124;--surface:#181b36;--ink:#eceefc;--mute:#9a9fc6;--line:#2b2f55;
+  --brand:#8f9bff;--brand-ink:#0f1124;--brand-soft:#242a5e;
+  --hl:#ffd93d;--hl-ink:#2a2100;--ok:#4cc38a;--bad:#ff8a80;--bad-soft:#3a1b1d;color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px))}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* bilah atas */
+.top{background:var(--surface);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:12px}
+.brand{display:flex;align-items:center;gap:10px;font:800 1.15rem/1 var(--f-display);letter-spacing:-.01em}
+.logo{width:34px;height:34px;border-radius:9px;background:var(--brand);display:grid;place-items:center}
+.logo i{display:block;width:16px;height:8px;background:var(--hl);border-radius:2px;transform:rotate(-8deg)}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+nav span{padding:6px 12px;border-radius:999px;color:var(--mute);font-weight:500;font-size:.9rem}
+nav span.on{background:var(--brand-soft);color:var(--brand)}
+
+/* hero */
+.hero{padding-block:36px 24px}
+.tabs{display:inline-flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:22px;flex-wrap:wrap}
+.tabs span{padding:7px 14px;border-radius:9px;font-weight:600;font-size:.88rem;color:var(--mute)}
+.tabs span.on{background:var(--brand);color:var(--brand-ink)}
+h1{font:800 clamp(2.1rem,6vw,3.3rem)/1.02 var(--f-display);letter-spacing:-.03em;margin:0 0 12px;text-wrap:balance}
+h1 mark{background:linear-gradient(transparent 58%,var(--hl) 58% 92%,transparent 92%);color:inherit;padding:0 .08em}
+.lead{max-width:60ch;color:var(--mute);margin:0 0 14px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{font:500 .78rem var(--f-mono);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 11px;color:var(--mute)}
+
+/* grid */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start;padding-bottom:28px}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.card h2{font:800 1.08rem/1.2 var(--f-display);margin:0 0 4px;display:flex;gap:10px;align-items:center}
+.card h2 b{font:500 .85rem var(--f-mono);background:var(--hl);color:var(--hl-ink);border-radius:6px;padding:2px 7px}
+.sub{color:var(--mute);font-size:.86rem;margin:0 0 14px}
+
+/* unggah */
+.drops{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.drop{display:flex;gap:12px;align-items:center;border:1.5px dashed var(--line);border-radius:12px;padding:14px;cursor:pointer;min-width:0;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--brand);background:var(--brand-soft)}
+.drop.has{border-style:solid;border-color:var(--brand);background:var(--brand-soft)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.drop:focus-within{outline:2px solid var(--brand);outline-offset:2px}
+.ext{flex:none;width:44px;height:44px;border-radius:10px;background:var(--bg);display:grid;place-items:center;font:500 .72rem var(--f-mono);color:var(--brand)}
+.drop b{display:block;font-weight:600}
+.drop small{display:block;color:var(--mute);overflow-wrap:anywhere}
+
+/* kontrol */
+textarea,input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:.92rem}
+textarea{min-height:170px;resize:vertical;line-height:1.5}
+textarea:focus,input[type=text]:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
+label.l{display:block;font-weight:600;font-size:.88rem;margin:14px 0 6px}
+.hint{color:var(--mute);font-size:.82rem;margin-top:6px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.opt{border:1px solid var(--line);border-radius:12px;padding:12px;cursor:pointer;display:block}
+.opt input{position:absolute;opacity:0;pointer-events:none}
+.opt b{display:block;font-weight:600}
+.opt small{color:var(--mute);font-size:.8rem;line-height:1.35;display:block}
+.opt:has(input:checked){border-color:var(--brand);background:var(--brand-soft)}
+.opt:has(input:focus-visible){outline:2px solid var(--brand);outline-offset:2px}
+.btn{background:var(--brand);color:var(--brand-ink);border:0;border-radius:11px;padding:12px 18px;font:600 .95rem var(--f-body);cursor:pointer;width:100%}
+.btn:hover:not(:disabled){filter:brightness(1.08)}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--brand);border:1px solid var(--brand)}
+.btn.sm{width:auto;padding:9px 14px;font-size:.88rem}
+
+/* ringkasan */
+.side{position:sticky;top:calc(12px + env(safe-area-inset-top,0px))}
+.sum dl{margin:12px 0 0;display:grid;grid-template-columns:auto 1fr;gap:9px 14px;font-size:.9rem}
+.sum dt{color:var(--mute)}
+.sum dd{margin:0;text-align:right;font-weight:600;overflow-wrap:anywhere}
+.sum dd.mono{font-family:var(--f-mono);font-weight:500}
+.sum hr{border:0;border-top:1px dashed var(--line);margin:14px 0}
+.big{display:flex;justify-content:space-between;align-items:baseline}
+.big span{color:var(--mute);font-size:.9rem}
+.big strong{font:800 2.1rem/1 var(--f-display);letter-spacing:-.02em}
+.big strong small{font:500 .85rem var(--f-mono);color:var(--mute);margin-left:4px}
+.bar{height:8px;background:var(--bg);border-radius:8px;overflow:hidden;margin-top:14px}
+.bar i{display:block;height:100%;width:0;background:var(--hl);transition:width .25s}
+.stat{color:var(--mute);font-size:.84rem;margin-top:8px;min-height:1.3em}
+.note{color:var(--mute);font-size:.8rem;text-align:center;margin:10px 0 0}
+
+/* hasil */
+.sumline{font-weight:600;margin:0 0 12px}
+.res{border-top:1px solid var(--line);padding:12px 0;font-size:.9rem;min-width:0}
+.res .t{font-weight:600;margin-bottom:4px}
+.res .t.ok{color:var(--ok)}.res .t.bad{color:var(--bad)}
+.res p{margin:0;color:var(--mute);overflow-wrap:anywhere}
+.res s{opacity:.75}
+.res mark{background:var(--hl);color:var(--hl-ink);padding:1px 3px;border-radius:3px}
+.reslist{max-height:420px;overflow:auto}
+
+/* info */
+.info{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding-bottom:48px}
+.info h3{font:800 1rem var(--f-display);margin:0 0 10px}
+.info p,.info li{color:var(--mute);font-size:.9rem}
+.info ol,.info ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:7px}
+.info li b{color:var(--ink);font-weight:600}
+
+@media (max-width:860px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .side{position:static}
+  .info{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:560px){
+  .drops,.seg{grid-template-columns:minmax(0,1fr)}
+  nav{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <div class="brand"><span class="logo"><i></i></span>Parafrase Kilat</div>
+  <nav aria-label="Menu"><span class="on">Parafrase</span><span>Cara kerja</span><span>Bantuan</span></nav>
+</div></header>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="tabs" aria-hidden="true"><span>Cek Similarity</span><span class="on">Parafrase Turnitin</span></div>
+    <h1>Parafrase kilat, <mark>hasil langsung</mark> file Word.</h1>
+    <p class="lead">Unggah PDF Turnitin dan naskah Word Anda. Hanya kalimat yang ditandai Turnitin yang diparafrase, langsung di file asli, lalu hasilnya Anda unduh sebagai .docx dengan blok kuning sebagai penanda.</p>
+    <div class="chips"><span class="chip">tanpa antre</span><span class="chip">format Word tetap utuh</span><span class="chip">SNI &amp; pasal dikunci</span></div>
+  </section>
+
+  <div class="grid">
+    <div class="col">
+      <section class="card" aria-labelledby="h1">
+        <h2 id="h1"><b>1</b>Unggah file</h2>
+        <p class="sub">PDF hasil Turnitin dan naskah asli. Diproses di browser Anda.</p>
+        <div class="drops">
+          <label class="drop" id="dz-pdf"><span class="ext">PDF</span><span><b>Laporan Turnitin</b><small id="pn">Klik atau seret file .pdf</small></span><input id="pf" type="file" accept=".pdf,application/pdf"></label>
+          <label class="drop" id="dz-doc"><span class="ext">DOCX</span><span><b>Naskah asli</b><small id="dn">Klik atau seret file .docx</small></span><input id="df" type="file" accept=".docx"></label>
+        </div>
+        <div style="margin-top:14px"><button class="btn ghost sm" id="b1" disabled>Deteksi teks terblok</button></div>
+      </section>
+
+      <section class="card" aria-labelledby="h2">
+        <h2 id="h2"><b>2</b>Periksa bagian terdeteksi</h2>
+        <p class="sub">Satu baris satu bagian. Hapus yang tidak perlu, atau tempel sendiri teks terblok jika deteksi otomatis tidak menangkapnya.</p>
+        <label class="l" for="segs" style="margin-top:0">Bagian yang akan diparafrase</label>
+        <textarea id="segs" placeholder="Tekan “Deteksi teks terblok”, atau tempel teks di sini, satu bagian per baris."></textarea>
+        <div class="hint" id="cnt">Belum ada bagian.</div>
+      </section>
+
+      <section class="card" aria-labelledby="h3">
+        <h2 id="h3"><b>3</b>Tingkat perubahan</h2>
+        <p class="sub">Makna, angka, dan rujukan tetap dijaga di semua tingkat.</p>
+        <div class="seg" role="radiogroup" aria-label="Tingkat perubahan">
+          <label class="opt"><input type="radio" name="lv" value="ringan"><b>Ringan</b><small>Ganti kata dan susun ulang frasa.</small></label>
+          <label class="opt"><input type="radio" name="lv" value="sedang" checked><b>Sedang</b><small>Ubah struktur kalimat dan diksi.</small></label>
+          <label class="opt"><input type="radio" name="lv" value="kuat"><b>Kuat</b><small>Pecah, gabung, dan urutkan ulang.</small></label>
+        </div>
+        <label class="l" for="lock">Istilah tambahan yang dikunci</label>
+        <input id="lock" type="text" placeholder="Metode Elemen Hingga; Judul Buku Anda">
+        <div class="hint">Pisahkan dengan titik koma. Otomatis terkunci: SNI/ISO/ASTM, UU dan peraturan, pasal, ayat, sitasi, kutipan langsung, angka dan satuan, singkatan huruf kapital.</div>
+      </section>
+
+      <section class="card" id="c4" hidden aria-labelledby="h4">
+        <h2 id="h4"><b>4</b>Hasil</h2>
+        <p class="sumline" id="sum"></p>
+        <div class="reslist" id="res"></div>
+      </section>
+    </div>
+
+    <aside class="side">
+      <div class="card sum" aria-live="polite">
+        <h2 style="margin:0">Ringkasan</h2>
+        <dl>
+          <dt>Layanan</dt><dd>Parafrase Turnitin</dd>
+          <dt>Naskah</dt><dd id="s-doc">Belum ada</dd>
+          <dt>Laporan</dt><dd id="s-pdf">Belum ada</dd>
+          <dt>Bagian</dt><dd class="mono" id="s-n">0</dd>
+          <dt>Tingkat</dt><dd id="s-lv">Sedang</dd>
+        </dl>
+        <hr>
+        <div class="big"><span>Perkiraan waktu</span><strong id="s-t">0<small>detik</small></strong></div>
+        <div class="bar" id="barw" hidden><i id="bi"></i></div>
+        <div class="stat" id="st"></div>
+        <label class="l" for="code" style="margin-top:14px">Kode akses</label>
+        <input id="code" type="text" placeholder="Isi jika diminta pemilik web" autocomplete="off">
+        <button class="btn" id="b2" style="margin-top:14px" disabled>Parafrase sekarang</button>
+        <button class="btn ghost" id="dl" style="margin-top:10px" disabled hidden>Unduh Word hasil parafrase</button>
+        <p class="note">Hasil langsung berupa .docx. Bagian yang diganti diberi blok kuning.</p>
+      </div>
+    </aside>
+  </div>
+
+  <section class="info">
+    <div class="card">
+      <h3>Tentang layanan</h3>
+      <p>Hanya teks yang ditandai Turnitin yang disentuh. Daftar pustaka dilewati, dan bagian yang tidak aman diparafrase otomatis ditandai untuk Anda tinjau, bukan diganti sembarangan.</p>
+    </div>
+    <div class="card">
+      <h3>Cara kerja</h3>
+      <ol>
+        <li><b>Unggah</b> PDF Turnitin dan Word.</li>
+        <li><b>Periksa</b> bagian yang terdeteksi.</li>
+        <li><b>Parafrase</b> dan ganti di file asli.</li>
+        <li><b>Unduh</b> .docx dengan blok kuning.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Sebelum dipakai</h3>
+      <ul>
+        <li>Baca ulang semua blok kuning sebelum submit.</li>
+        <li>Judul buku tanpa tanda kutip perlu dimasukkan ke kolom istilah dikunci.</li>
+        <li>Jika PDF tidak terbaca, tempel teks terblok manual.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+let pdfF=null,docF=null,outBlob=null,outName='',busy=false;
+const LV={ringan:['Ringan','Ganti sebagian kata dan susun ulang frasa, kerangka kalimat boleh tetap mirip.'],
+  sedang:['Sedang','Ubah struktur kalimat dan pilihan kata secara jelas.'],
+  kuat:['Kuat','Ubah total: pecah atau gabung kalimat, pindahkan klausa, balik aktif dan pasif.']};
+const level=()=>document.querySelector('input[name=lv]:checked').value;
+
+/* ---------- unggah ---------- */
+function setFile(kind,f){
+  if(kind==='pdf'){pdfF=f;$('pn').textContent=f?f.name:'Klik atau seret file .pdf';$('dz-pdf').classList.toggle('has',!!f);$('s-pdf').textContent=f?f.name:'Belum ada'}
+  else{docF=f;$('dn').textContent=f?f.name:'Klik atau seret file .docx';$('dz-doc').classList.toggle('has',!!f);$('s-doc').textContent=f?f.name:'Belum ada'}
+  sync();
+}
+$('pf').onchange=e=>setFile('pdf',e.target.files[0]||null);
+$('df').onchange=e=>setFile('doc',e.target.files[0]||null);
+[['dz-pdf','pdf',/\.pdf$/i],['dz-doc','doc',/\.docx$/i]].forEach(([id,k,re])=>{
+  const z=$(id);
+  ['dragenter','dragover'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.add('over')}));
+  ['dragleave','drop'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.remove('over')}));
+  z.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f&&re.test(f.name))setFile(k,f)});
+});
+document.querySelectorAll('input[name=lv]').forEach(r=>r.onchange=sync);
+$('segs').oninput=sync;
+
+const lines=()=>$('segs').value.split('\n').map(s=>s.trim()).filter(s=>s.length>=8);
+function sync(){
+  const n=lines().length,sec=n*5;
+  $('s-n').textContent=n;
+  $('s-lv').textContent=LV[level()][0];
+  $('s-t').innerHTML=(sec>=90?Math.ceil(sec/60)+'<small>menit</small>':sec+'<small>detik</small>');
+  $('cnt').textContent=n?n+' bagian akan diparafrase.':'Belum ada bagian.';
+  $('b1').disabled=busy||!(pdfF);
+  $('b2').disabled=busy||!(docF&&n);
+}
+
+/* ---------- deteksi blok warna di PDF ---------- */
+const mul=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
+const colored=c=>{const mx=Math.max(...c),mn=Math.min(...c);return mx-mn>30&&mx>90};
+async function detect(file){
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+  const O=pdfjsLib.OPS,out=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const pg=await pdf.getPage(p),ol=await pg.getOperatorList(),tc=await pg.getTextContent();
+    let m=[1,0,0,1,0,0],fill=[0,0,0],st=[],pend=[],rects=[];
+    ol.fnArray.forEach((fn,i)=>{
+      const a=ol.argsArray[i];
+      if(fn===O.save)st.push([m,fill]);
+      else if(fn===O.restore){const t=st.pop();if(t){m=t[0];fill=t[1]}}
+      else if(fn===O.transform)m=mul(m,a);
+      else if(fn===O.setFillRGBColor)fill=[a[0],a[1],a[2]];
+      else if(fn===O.constructPath){
+        const ops=a[0],co=a[1];let k=0;
+        for(const op of ops){
+          if(op===O.rectangle){
+            const x=co[k],y=co[k+1],w=co[k+2],h=co[k+3];k+=4;
+            const pts=[[x,y],[x+w,y],[x,y+h],[x+w,y+h]].map(q=>[m[0]*q[0]+m[2]*q[1]+m[4],m[1]*q[0]+m[3]*q[1]+m[5]]);
+            const xs=pts.map(q=>q[0]),ys=pts.map(q=>q[1]);
+            pend.push([Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]);
+          }else if(op===O.moveTo||op===O.lineTo)k+=2;
+          else if(op===O.curveTo)k+=6;
+          else if(op===O.curveTo2||op===O.curveTo3)k+=4;
+        }
+      }else if(fn===O.fill||fn===O.eoFill||fn===O.fillStroke||fn===O.eoFillStroke||fn===O.closeFillStroke||fn===O.closeEOFillStroke){
+        if(colored(fill))rects.push(...pend);pend=[];
+      }else if(fn===O.endPath||fn===O.stroke||fn===O.closeStroke)pend=[];
+    });
+    let cur=[];
+    const flush=()=>{const s=cur.join(' ').replace(/\s+/g,' ').trim();if(s.length>=20)out.push(s);cur=[]};
+    for(const it of tc.items){
+      if(!it.str||!it.str.trim())continue;
+      const x=it.transform[4]+(it.width||0)/2,y=it.transform[5]+(it.height||8)*0.3;
+      if(rects.some(r=>x>=r[0]-1&&x<=r[2]+1&&y>=r[1]-1&&y<=r[3]+1))cur.push(it.str);else flush();
+    }
+    flush();
+  }
+  return [...new Set(out)];
+}
+$('b1').onclick=async()=>{
+  busy=true;sync();$('b1').textContent='Membaca PDF…';
+  try{
+    const s=await detect(pdfF);
+    $('segs').value=s.join('\n');
+    if(!s.length)$('cnt').textContent='Tidak ada blok warna yang terbaca otomatis. Tempel teks terblok secara manual, satu bagian per baris.';
+  }catch(e){$('cnt').textContent='Gagal membaca PDF: '+(e.message||e)+'. Anda tetap bisa menempel teks terblok manual.'}
+  busy=false;$('b1').textContent='Deteksi ulang';sync();
+};
+
+/* ---------- penguncian teks penting ---------- */
+const PROT=[
+ /\b(?:SNI|ISO|ASTM|ACI|AISC|AASHTO|SKSNI|BS|DIN|JIS|PBI|PPPURG|RSNI)[\s-]?\d[\w.\-:/]*(?:\s?:\s?\d{4})?/g,
+ /\b(?:Undang-Undang|UU|Peraturan\s+(?:Pemerintah|Menteri|Presiden|Daerah|Bupati|Walikota|Gubernur)|PP|Perpres|Permen\w*|Kepmen\w*|Perda|Perwali|Perbup)(?:\s+[A-Z]{2,})*(?:\s+(?:No(?:mor|\.)?|Republik\s+Indonesia))*\s*\d+[\w./\-]*(?:\s+[Tt]ahun\s+\d{4})?/g,
+ /\b[Pp]asal\s+\d+[\w]*(?:\s+ayat\s*\(?\d+\)?)?(?:\s+huruf\s+[a-z])?/g,
+ /\bayat\s*\(\d+\)/g,
+ /\([^()]*\b(?:19|20)\d{2}[a-z]?[^()]*\)/g,
+ /\[\d+(?:\s*[,–-]\s*\d+)*\]/g,
+ /"[^"]+"|“[^”]+”/g,
+ /\d[\d.,]*(?:\s?(?:%|mm|cm|km|kg|kN|MPa|Mpa|N\/mm|m²|m2|m³|m3|m|ton|jam|detik|Hz|°C))?/g,
+ /\b[A-Z]{2,}\d*\b/g
+];
+const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+function mask(t){
+  const map=[];let n=0;
+  const put=m=>{const k='⟦x'+[...String(n++)].map(d=>'abcdefghij'[d]).join('')+'⟧';map.push([k,m]);return k};
+  const ex=$('lock').value.split(';').map(s=>s.trim()).filter(Boolean).map(s=>new RegExp(esc(s),'gi'));
+  let s=t;for(const re of [...ex,...PROT])s=s.replace(re,put);
+  return{s,map};
+}
+const unmask=(s,map)=>map.reduce((a,[k,v])=>a.split(k).join(v),s);
+
+/* ---------- parafrase via server (/api/paraphrase) ---------- */
+async function callApi(payload){
+  const r=await fetch('/api/paraphrase',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('code').value.trim()},body:JSON.stringify(payload)});
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok){const e=new Error(j.error||('Server error '+r.status));e.status=r.status;throw e}
+  return j.text||'';
+}
+async function paraphrase(seg,before,after){
+  const {s,map}=mask(seg);
+  if(!/[\p{L}]{3}/u.test(s.replace(/\u27E6x[a-j]+\u27E7/g,'')))return null;
+  const norm=x=>x.toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
+  for(let a=0;a<3;a++){
+    let o=(await callApi({target:s,before,after,level:level()})).trim().replace(/^["\u201C]|["\u201D]$/g,'');
+    const okTok=map.every(([k])=>o.split(k).length===2)&&(o.match(/\u27E6x[a-j]+\u27E7/g)||[]).length===map.length;
+    const ratio=o.length/Math.max(1,s.length);
+    if(okTok&&ratio>0.5&&ratio<1.9&&norm(o)!==norm(s))return unmask(o,map);
+  }
+  return null;
+}
+
+/* ---------- pencarian & penggantian di Word ---------- */
+const nrm=s=>{let n='',m=[];for(let i=0;i<s.length;i++){if(/[\p{L}\p{N}]/u.test(s[i])){n+=s[i].toLowerCase();m.push(i)}}return{n,m}};
+const cache=new Map();
+function info(p){
+  let c=cache.get(p);if(c)return c;
+  const items=[];let pos=0;
+  for(const t of p.getElementsByTagNameNS(W,'t')){const x=t.textContent;items.push({t,r:t.parentNode,start:pos,end:pos+x.length});pos+=x.length}
+  const text=items.map(i=>i.t.textContent).join('');
+  c={items,text,...nrm(text)};cache.set(p,c);return c;
+}
+const REFS=['daftar pustaka','daftar referensi','references','reference','bibliography','daftar rujukan'];
+function locate(paras,seg){
+  const q=nrm(seg.normalize('NFKC')).n;if(q.length<8)return null;
+  let inRef=false;
+  for(const p of paras){
+    const c=info(p);
+    if(c.text.length<30&&REFS.includes(c.text.trim().toLowerCase().replace(/:$/,'')))inRef=true;
+    if(inRef||c.n.length<q.length)continue;
+    const i=c.n.indexOf(q);
+    if(i>=0)return{p,c,s:c.m[i],e:c.m[i+q.length-1]+1};
+  }
+  return null;
+}
+function setT(r,txt){
+  const ts=[...r.getElementsByTagNameNS(W,'t')];
+  ts.slice(1).forEach(t=>t.parentNode.removeChild(t));
+  ts[0].textContent=txt;ts[0].setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');
+}
+const AFTER=['u','effect','bdr','shd','fitText','vertAlign','rtl','cs','em','lang','eastAsianLayout','specVanish','oMath'];
+function hl(r,doc){
+  let pr=[...r.children].find(c=>c.localName==='rPr');
+  if(!pr){pr=doc.createElementNS(W,'w:rPr');r.insertBefore(pr,r.firstChild)}
+  [...pr.children].filter(c=>c.localName==='highlight').forEach(c=>pr.removeChild(c));
+  const h=doc.createElementNS(W,'w:highlight');h.setAttributeNS(W,'w:val','yellow');
+  const nx=[...pr.children].find(c=>AFTER.includes(c.localName));
+  nx?pr.insertBefore(h,nx):pr.appendChild(h);
+}
+function replaceRange(doc,loc,txt){
+  let first=true;
+  for(const it of loc.c.items){
+    if(it.end<=loc.s||it.start>=loc.e)continue;
+    const full=it.t.textContent,a=Math.max(loc.s,it.start)-it.start,b=Math.min(loc.e,it.end)-it.start;
+    const pre=full.slice(0,a),post=full.slice(b),r=it.r;
+    if(pre){const c=r.cloneNode(true);setT(c,pre);r.parentNode.insertBefore(c,r)}
+    if(post){const c=r.cloneNode(true);setT(c,post);r.parentNode.insertBefore(c,r.nextSibling)}
+    if(first){setT(r,txt);hl(r,doc);first=false}
+    else{const only=[...r.children].every(c=>c.localName==='rPr'||c.localName==='t');
+      if(only)r.parentNode.removeChild(r);else setT(r,'')}
+  }
+  cache.delete(loc.p);
+}
+
+/* ---------- alur utama ---------- */
+const sp=(tag,t)=>{const e=document.createElement(tag);e.textContent=t;return e};
+function row(cls,title,nodes){
+  const d=document.createElement('div');d.className='res';
+  const t=sp('div',title);t.className='t '+cls;d.appendChild(t);
+  if(nodes){const p=document.createElement('p');p.append(...nodes);d.appendChild(p)}
+  $('res').appendChild(d);
+}
+$('b2').onclick=async()=>{
+  const list=lines();if(!list.length||!docF)return;
+  busy=true;sync();$('c4').hidden=false;$('res').innerHTML='';$('sum').textContent='';
+  $('dl').hidden=true;$('dl').disabled=true;$('barw').hidden=false;$('bi').style.width='0';
+  let ok=0,miss=0,fail=0;
+  try{
+    const zip=await JSZip.loadAsync(await docF.arrayBuffer());
+    const xml=await zip.file('word/document.xml').async('string');
+    const doc=new DOMParser().parseFromString(xml,'application/xml');
+    const paras=[...doc.getElementsByTagNameNS(W,'p')];
+    cache.clear();
+    for(let i=0;i<list.length;i++){
+      const seg=list[i];
+      $('st').textContent=`Memproses ${i+1} dari ${list.length}…`;$('bi').style.width=(i/list.length*100)+'%';
+      const loc=locate(paras,seg);
+      if(!loc){miss++;row('bad','Tidak ditemukan di Word',[sp('span',seg)]);continue}
+      const orig=loc.c.text.slice(loc.s,loc.e);
+      let np=null;
+      try{np=await paraphrase(orig,loc.c.text.slice(Math.max(0,loc.s-160),loc.s),loc.c.text.slice(loc.e,loc.e+160))}
+      catch(e){
+        if(e&&(e.status===401||e.status===429||e.status===500||e.status===503)){$('st').textContent=e.message;break}
+      }
+      if(!np){fail++;row('bad','Dilewati, tinjau manual',[sp('span',orig)]);continue}
+      replaceRange(doc,loc,np);ok++;
+      row('ok','Diganti',[sp('s',orig),document.createElement('br'),sp('mark',np)]);
+    }
+    $('bi').style.width='100%';
+    zip.file('word/document.xml',new XMLSerializer().serializeToString(doc));
+    outBlob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',compression:'DEFLATE'});
+    outName=docF.name.replace(/\.docx$/i,'')+'_parafrase.docx';
+    $('sum').textContent=`${ok} bagian diparafrase, ${fail} dilewati, ${miss} tidak ditemukan. Teks lain tidak diubah.`;
+    if($('st').textContent.startsWith('Memproses'))$('st').textContent='Selesai.';
+    if(ok){$('dl').hidden=false;$('dl').disabled=false}
+  }catch(e){$('st').textContent='Terjadi kesalahan: '+(e.message||e)}
+  busy=false;sync();
+};
+$('dl').onclick=()=>{
+  const a=document.createElement('a');a.href=URL.createObjectURL(outBlob);a.download=outName;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+};
+sync();
+</script>
+
+</body>
+</html>
