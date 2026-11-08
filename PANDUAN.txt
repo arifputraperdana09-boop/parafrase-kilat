@@ -1,0 +1,31 @@
+PARAFRASE KILAT - PANDUAN PASANG (untuk pemula)
+
+ISI PAKET
+  public/index.html   = tampilan web
+  api/paraphrase.js   = server kecil yang memanggil Claude (API key disimpan rahasia di Vercel)
+  package.json        = berkas pelengkap
+
+LANGKAH
+1. Ekstrak file zip ini di komputer Anda.
+2. Buka github.com, klik tanda + (kanan atas) lalu "New repository".
+   Nama: parafrase-kilat. Pilih Private. Klik "Create repository".
+3. Di halaman repository baru, klik "uploading an existing file".
+   Buka folder hasil ekstrak, pilih SEMUA isinya (folder public, folder api, package.json, dan lainnya),
+   seret ke halaman GitHub. Klik "Commit changes".
+4. Buka vercel.com. Di bagian "Import Git Repository" klik Install,
+   beri izin ke GitHub, lalu pilih repository parafrase-kilat dan klik Import.
+5. SEBELUM menekan Deploy, buka bagian "Environment Variables" dan isi:
+     ANTHROPIC_API_KEY = (API key dari console.anthropic.com)
+     ACCESS_CODE       = (kode rahasia buatan Anda, misalnya kilat2026) -> untuk tahap uji
+     DAILY_LIMIT       = 200   (opsional: batas permintaan per pengguna per hari)
+6. Klik Deploy. Tunggu sekitar 1 menit. Vercel memberi alamat web (.vercel.app).
+7. Buka alamat itu, isi "Kode akses", dan coba dengan PDF Turnitin dan Word.
+
+SEBELUM DIBUKA UMUM
+- Di console.anthropic.com pasang batas pengeluaran bulanan (spend limit). Ini pengaman utama saldo Anda.
+- Coba 3 sampai 5 dokumen nyata dulu.
+- Kosongkan ACCESS_CODE (hapus isinya di Vercel lalu Redeploy) bila ingin benar-benar terbuka untuk umum.
+
+CATATAN
+- File Word dan PDF diproses di browser pengguna. Server hanya menerima potongan kalimat yang diparafrase.
+- API key jangan pernah dikirim ke siapa pun atau ditulis di file.
