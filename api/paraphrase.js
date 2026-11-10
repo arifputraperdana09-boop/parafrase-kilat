@@ -77,6 +77,91 @@ function parseResults(j) {
   return { results: arr.map(x => ({ id: String(x.id), text: String(x.text || '') })) };
 }
 
+/* ---------- jalur DeepSeek (opsional, aktif kalau PROVIDER=deepseek) ---------- */
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+
+function buildPromptDeepSeek(items, level, retry) {
+  const data = items.map(it => ({ id: it.id, sebelum: it.before || '-', target: it.target, sesudah: it.after || '-' }));
+  return `Kamu editor karya tulis ilmiah berbahasa Indonesia. Parafrasekan setiap "target" pada daftar di bawah tanpa mengubah makna, fakta, tingkat kepastian, atau nada akademiknya.
+Tingkat perubahan: ${LEVEL[level]}
+Aturan:
+1. Token seperti [[K0]], [[K1]], dst adalah bagian terkunci (nomor standar, peraturan, pasal, sitasi, angka, kutipan, singkatan). Salin PERSIS karakter demi karakter, termasuk kurung sikunya. Jangan diterjemahkan, diberi spasi, dihapus, atau digandakan. Susun ulang kalimat di sekitarnya saja.
+2. Jangan menambah atau menghilangkan informasi, data, klaim, atau opini. Jangan mengganti istilah teknis baku, nama orang, judul, nama peraturan, atau nama metode.
+3. Gunakan bahasa Indonesia formal. Hindari pembuka klise seperti "Perlu diketahui bahwa" atau "Dengan demikian".
+4. Panjang kira-kira sama dengan target aslinya. Hasil harus berbeda jelas dari aslinya, bukan hanya mengganti satu dua kata.
+5. "target" hanya potongan teks; hasilnya harus tetap menyambung dengan teks "sebelum" dan "sesudah". Jangan menyalin teks "sebelum" atau "sesudah" ke dalam hasil.
+6. Hasil berupa teks polos tanpa tanda kutip pembuka/penutup dan tanpa markdown.${retry ? '\n7. PERHATIAN: percobaan sebelumnya ditolak karena token terkunci tidak utuh atau hasil terlalu mirip aslinya. Pastikan setiap token [[Kn]] muncul tepat satu kali dan struktur kalimat benar-benar berubah.' : ''}
+
+Kembalikan HANYA JSON berupa objek dengan satu kunci "items" berisi array objek {"id": ..., "text": ...} untuk setiap item, id sama persis. Jangan tambahkan teks, markdown, atau penjelasan lain di luar JSON itu.
+
+DAFTAR ITEM (JSON):
+${JSON.stringify(data)}`;
+}
+
+async function callDeepSeek(key, prompt) {
+  const ac = new AbortController();
+  const to = setTimeout(() => ac.abort(), 40000);
+  let r;
+  try {
+    r = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
+      signal: ac.signal,
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.8,
+        max_tokens: 4096,
+        response_format: { type: 'json_object' }
+      })
+    });
+  } finally {
+    clearTimeout(to);
+  }
+  let j = {};
+  try { j = await r.json(); } catch (e) {}
+  return { r, j };
+}
+
+function parseDeepSeekResults(j) {
+  const msg = (j.choices || [])[0] && j.choices[0].message;
+  const raw = (msg && msg.content || '').trim();
+  const finish = (j.choices || [])[0] && j.choices[0].finish_reason;
+  if (!raw) return { error: 'AI tidak mengembalikan hasil' + (finish ? ' (' + finish + ')' : '') + '.' };
+  let obj = null;
+  try { obj = JSON.parse(raw); } catch (e) {
+    const a = raw.indexOf('{'), b = raw.lastIndexOf('}');
+    if (a >= 0 && b > a) { try { obj = JSON.parse(raw.slice(a, b + 1)); } catch (e2) {} }
+  }
+  const arr = obj && Array.isArray(obj.items) ? obj.items : (Array.isArray(obj) ? obj : null);
+  if (!Array.isArray(arr)) return { error: 'Format jawaban AI tidak terbaca' + (finish === 'length' ? ' (jawaban terpotong).' : '.') };
+  return { results: arr.map(x => ({ id: String(x.id), text: String(x.text || '') })) };
+}
+
+async function handleDeepSeek(res, key, items, level, retry) {
+  const prompt = buildPromptDeepSeek(items, level, retry);
+  let out;
+  try { out = await callDeepSeek(key, prompt); }
+  catch (e) { return res.status(502).json({ error: 'Gagal menghubungi DeepSeek.' }); }
+  const { r, j } = out;
+  const msg = (j && j.error && j.error.message) || '';
+  if (r.ok) {
+    const p = parseDeepSeekResults(j);
+    if (p.results) return res.status(200).json({ results: p.results, model: DEEPSEEK_MODEL });
+    return res.status(502).json({ error: p.error });
+  }
+  if (r.status === 429) {
+    return res.status(429).json({ daily: false, retryAfter: 40, error: 'Jatah per menit DeepSeek penuh.' });
+  }
+  if (r.status === 402) {
+    return res.status(502).json({ error: 'Saldo DeepSeek habis (akun butuh top-up). Pesan: ' + msg });
+  }
+  if (r.status === 401 || r.status === 403) {
+    return res.status(502).json({ error: 'API key DeepSeek ditolak (' + r.status + '). Periksa DEEPSEEK_API_KEY di Vercel. Pesan: ' + msg });
+  }
+  return res.status(502).json({ error: 'DeepSeek error ' + r.status + ': ' + msg });
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Metode tidak didukung.' });
 
@@ -84,8 +169,17 @@ module.exports = async (req, res) => {
   if (need && req.headers['x-access-code'] !== need)
     return res.status(401).json({ error: 'Kode akses salah atau belum diisi. Samakan dengan ACCESS_CODE di Vercel.' });
 
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return res.status(500).json({ error: 'Server belum diatur: GEMINI_API_KEY kosong di Vercel.' });
+  // Saklar penyedia AI: set PROVIDER=deepseek di Vercel untuk sementara pindah ke DeepSeek.
+  // Tidak diisi (atau "gemini") = tetap pakai Gemini seperti biasa.
+  const provider = String(process.env.PROVIDER || 'gemini').toLowerCase();
+  const key = provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : process.env.GEMINI_API_KEY;
+  if (!key) {
+    return res.status(500).json({
+      error: provider === 'deepseek'
+        ? 'Server belum diatur: DEEPSEEK_API_KEY kosong di Vercel.'
+        : 'Server belum diatur: GEMINI_API_KEY kosong di Vercel.'
+    });
+  }
 
   const b = req.body || {};
   const level = LEVEL[b.level] ? b.level : 'sedang';
@@ -104,6 +198,8 @@ module.exports = async (req, res) => {
   if (hits.size > 5000) hits.clear();
   if (n > Number(process.env.DAILY_LIMIT || 150))
     return res.status(429).json({ daily: true, error: 'Batas pemakaian harian web ini tercapai. Coba lagi besok.' });
+
+  if (provider === 'deepseek') return handleDeepSeek(res, key, items, level, !!b.retry);
 
   const prompt = buildPrompt(items, level, !!b.retry);
   let lastErr = 'Layanan AI tidak merespons.';
