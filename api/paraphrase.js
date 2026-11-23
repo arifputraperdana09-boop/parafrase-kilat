@@ -8,6 +8,7 @@ const LEVEL = {
 // Urutan model yang dicoba. Bila satu model tidak tersedia untuk akun Anda, model berikutnya dipakai.
 const MODELS = [process.env.MODEL, 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.0-flash']
   .filter(Boolean).filter((m, i, a) => a.indexOf(m) === i);
+const { getPayment } = require('../lib/settings');
 const hits = new Map(); // pembatas harian per alamat IP (berlaku per instance server)
 
 function buildPrompt(items, level, retry) {
@@ -165,8 +166,9 @@ async function handleDeepSeek(res, key, items, level, retry) {
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Metode tidak didukung.' });
 
+  // Saklar pembayaran (diatur di halaman /admin). OFF = gratis, kode akses tidak diminta.
   const need = process.env.ACCESS_CODE;
-  if (need && req.headers['x-access-code'] !== need)
+  if (need && (await getPayment()) && req.headers['x-access-code'] !== need)
     return res.status(401).json({ error: 'Kode akses salah atau belum diisi. Samakan dengan ACCESS_CODE di Vercel.' });
 
   // Saklar penyedia AI: set PROVIDER=deepseek di Vercel untuk sementara pindah ke DeepSeek.

@@ -26,6 +26,17 @@ SEBELUM DIBUKA UMUM
 - Coba 3 sampai 5 dokumen nyata dulu.
 - Kosongkan ACCESS_CODE (hapus isinya di Vercel lalu Redeploy) bila ingin benar-benar terbuka untuk umum.
 
+MENU ADMIN (saklar pembayaran ON/OFF)
+1. Di Vercel > Settings > Environment Variables tambahkan:
+     ADMIN_PASSWORD = (kata sandi admin buatan Anda, jangan sama dengan ACCESS_CODE)
+2. Di Vercel > Storage pilih Upstash (Redis) > Create/Connect ke project parafrase-kilat.
+   Variabel KV_REST_API_URL dan KV_REST_API_TOKEN akan terisi otomatis.
+3. Redeploy, lalu buka alamat-web-anda/admin dan masuk dengan ADMIN_PASSWORD.
+4. Pembayaran ON  = customer wajib mengisi kode akses (ACCESS_CODE).
+   Pembayaran OFF = parafrase gratis, kolom kode akses disembunyikan dari customer.
+   Perubahan langsung berlaku tanpa Redeploy.
+- Opsional: PAYMENT_ENABLED = off  -> nilai awal sebelum saklar pernah diubah (default on).
+
 CATATAN
 - File Word dan PDF diproses di browser pengguna. Server hanya menerima potongan kalimat yang diparafrase.
 - API key jangan pernah dikirim ke siapa pun atau ditulis di file.

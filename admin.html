@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin Parafrase Kilat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Figtree:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#f3f4f8;--surface:#ffffff;--ink:#16193a;--mute:#5d6285;--line:#dfe1ec;
+  --brand:#2b3bd6;--brand-ink:#ffffff;--brand-soft:#e8eafc;
+  --hl:#ffd93d;--hl-ink:#3b2f00;--ok:#0f7a4d;--bad:#b42318;--bad-soft:#fdecea;
+  --f-display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1124;--surface:#181b36;--ink:#eceefc;--mute:#9a9fc6;--line:#2b2f55;
+  --brand:#8f9bff;--brand-ink:#0f1124;--brand-soft:#242a5e;--ok:#4cc38a;--bad:#ff8a80;--bad-soft:#3a1b1d;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1124;--surface:#181b36;--ink:#eceefc;--mute:#9a9fc6;--line:#2b2f55;
+  --brand:#8f9bff;--brand-ink:#0f1124;--brand-soft:#242a5e;--ok:#4cc38a;--bad:#ff8a80;--bad-soft:#3a1b1d;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--f-body)}
+.top{background:var(--surface);border-bottom:1px solid var(--line)}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;padding-block:12px;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;font:800 1.1rem/1 var(--f-display)}
+.logo{width:32px;height:32px;border-radius:9px;background:var(--brand);display:grid;place-items:center}
+.logo i{display:block;width:15px;height:8px;background:var(--hl);border-radius:2px;transform:rotate(-8deg)}
+.top a{color:var(--mute);font-size:.88rem}
+h1{font:800 1.7rem/1.1 var(--f-display);margin:32px 0 6px}
+.lead{color:var(--mute);margin:0 0 20px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
+label.l{display:block;font-weight:600;font-size:.88rem;margin:0 0 6px}
+input[type=password]{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit}
+input[type=password]:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
+.btn{background:var(--brand);color:var(--brand-ink);border:0;border-radius:11px;padding:11px 18px;font:600 .95rem var(--f-body);cursor:pointer;margin-top:12px}
+.btn.ghost{background:transparent;color:var(--brand);border:1px solid var(--brand)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.row h2{font:800 1.1rem/1.2 var(--f-display);margin:0 0 4px}
+.row p{margin:0;color:var(--mute);font-size:.88rem}
+/* saklar */
+.sw{position:relative;flex:none;width:68px;height:38px;border:0;border-radius:999px;background:var(--line);cursor:pointer;transition:background .2s;padding:0}
+.sw::after{content:"";position:absolute;top:4px;left:4px;width:30px;height:30px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.sw[aria-checked="true"]{background:var(--ok)}
+.sw[aria-checked="true"]::after{transform:translateX(30px)}
+.sw:focus-visible{outline:2px solid var(--brand);outline-offset:3px}
+.sw:disabled{opacity:.5;cursor:wait}
+.state{margin-top:16px;padding:12px 14px;border-radius:10px;font-weight:600;font-size:.92rem}
+.state.on{background:var(--brand-soft);color:var(--brand)}
+.state.off{background:var(--hl);color:var(--hl-ink)}
+.msg{font-size:.86rem;margin-top:10px;min-height:1.3em}
+.msg.bad{color:var(--bad)}.msg.ok{color:var(--ok)}
+.warn{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:10px 12px;font-size:.86rem;margin-top:12px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="brand"><span class="logo"><i></i></span>Admin</div>
+  <a href="/">Ke halaman utama</a>
+</div></header>
+
+<main class="wrap">
+  <h1>Pengaturan web</h1>
+  <p class="lead">Halaman khusus pemilik web.</p>
+
+  <form class="card" id="login">
+    <label class="l" for="pw">Kata sandi admin</label>
+    <input id="pw" type="password" autocomplete="current-password" required>
+    <button class="btn" id="go" type="submit">Masuk</button>
+    <div class="msg bad" id="lmsg" role="alert"></div>
+  </form>
+
+  <section id="panel" hidden>
+    <div class="card">
+      <div class="row">
+        <div>
+          <h2 id="lbl">Pembayaran</h2>
+          <p>ON: customer wajib mengisi kode akses. OFF: parafrase gratis tanpa kode akses.</p>
+        </div>
+        <button class="sw" id="sw" role="switch" aria-checked="false" aria-labelledby="lbl"></button>
+      </div>
+      <div class="state" id="state"></div>
+      <div class="msg" id="msg" role="status"></div>
+      <div class="warn" id="nostore" hidden>Penyimpanan belum terhubung, jadi saklar belum bisa diubah. Di Vercel buka <b>Storage</b>, pilih <b>Upstash (Redis)</b>, Connect ke project ini, lalu Redeploy.</div>
+      <div class="warn" id="nocode" hidden>ACCESS_CODE di Vercel masih kosong, jadi web tetap gratis walaupun saklar ON.</div>
+    </div>
+    <button class="btn ghost" id="out" type="button">Keluar</button>
+  </section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const KEY='pk-admin-pw';
+let pw='';
+try{pw=sessionStorage.getItem(KEY)||''}catch(e){}
+
+async function api(body){
+  const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':pw},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw Object.assign(new Error(j.error||('Error '+r.status)),{status:r.status});
+  return j;
+}
+function show(j){
+  $('login').hidden=true;$('panel').hidden=false;
+  $('sw').setAttribute('aria-checked',String(!!j.payment));
+  $('state').className='state '+(j.payment?'on':'off');
+  $('state').textContent=j.payment?'Pembayaran ON — customer harus memasukkan kode akses.':'Pembayaran OFF — customer bisa parafrase gratis.';
+  $('nostore').hidden=!!j.store;
+  $('sw').disabled=!j.store;
+  $('nocode').hidden=!!j.accessCode||!j.payment;
+}
+async function login(){
+  $('lmsg').textContent='';$('go').disabled=true;
+  try{const j=await api({check:true});try{sessionStorage.setItem(KEY,pw)}catch(e){}show(j)}
+  catch(e){$('lmsg').textContent=e.message;pw='';try{sessionStorage.removeItem(KEY)}catch(e2){}}
+  finally{$('go').disabled=false}
+}
+$('login').addEventListener('submit',e=>{e.preventDefault();pw=$('pw').value;login()});
+$('sw').addEventListener('click',async()=>{
+  const next=$('sw').getAttribute('aria-checked')!=='true';
+  $('sw').disabled=true;$('msg').className='msg';$('msg').textContent='Menyimpan…';
+  try{const j=await api({payment:next});show(j);$('msg').className='msg ok';$('msg').textContent='Tersimpan.'}
+  catch(e){$('msg').className='msg bad';$('msg').textContent=e.message;$('sw').disabled=false;if(e.status===401)$('out').click()}
+});
+$('out').addEventListener('click',()=>{pw='';try{sessionStorage.removeItem(KEY)}catch(e){}$('panel').hidden=true;$('login').hidden=false;$('pw').value=''});
+if(pw)login();
+</script>
+</body>
+</html>
