@@ -110,6 +110,7 @@ label.l{display:block;font-weight:600;font-size:.88rem;margin:14px 0 6px}
 .bar i{display:block;height:100%;width:0;background:var(--hl);transition:width .25s}
 .stat{color:var(--mute);font-size:.84rem;margin-top:8px;min-height:1.3em}
 .note{color:var(--mute);font-size:.8rem;text-align:center;margin:10px 0 0}
+.free{margin:14px 0 0;padding:9px 12px;border-radius:10px;background:var(--hl);color:var(--hl-ink);font-weight:600;font-size:.86rem;text-align:center}
 
 /* hasil */
 .sumline{font-weight:600;margin:0 0 12px}
@@ -209,8 +210,11 @@ label.l{display:block;font-weight:600;font-size:.88rem;margin:14px 0 6px}
         <div class="big"><span>Perkiraan waktu</span><strong id="s-t">0<small>detik</small></strong></div>
         <div class="bar" id="barw" hidden><i id="bi"></i></div>
         <div class="stat" id="st"></div>
-        <label class="l" for="code" style="margin-top:14px">Kode akses</label>
-        <input id="code" type="text" placeholder="Isi jika diminta pemilik web" autocomplete="off">
+        <div id="codebox">
+          <label class="l" for="code" style="margin-top:14px">Kode akses</label>
+          <input id="code" type="text" placeholder="Isi jika diminta pemilik web" autocomplete="off">
+        </div>
+        <p class="free" id="free" hidden>Gratis untuk sementara, tanpa kode akses.</p>
         <button class="btn" id="b2" style="margin-top:14px" disabled>Parafrase sekarang</button>
         <button class="btn ghost" id="dl" style="margin-top:10px" disabled hidden>Unduh Word hasil parafrase</button>
         <p class="note">Hasil langsung berupa .docx. Bagian yang diganti diberi blok kuning.</p>
@@ -253,6 +257,12 @@ const LV={ringan:['Ringan','Ganti sebagian kata dan susun ulang frasa, kerangka 
   sedang:['Sedang','Ubah struktur kalimat dan pilihan kata secara jelas.'],
   kuat:['Kuat','Ubah total: pecah atau gabung kalimat, pindahkan klausa, balik aktif dan pasif.']};
 const level=()=>document.querySelector('input[name=lv]:checked').value;
+
+/* ---------- saklar pembayaran (diatur di /admin) ---------- */
+fetch('/api/settings',{cache:'no-store'}).then(r=>r.json()).then(j=>{
+  const free=j&&j.payment===false;
+  $('codebox').hidden=free;$('free').hidden=!free;
+}).catch(()=>{});
 
 /* ---------- unggah ---------- */
 function setFile(kind,f){
